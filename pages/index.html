@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Postage Batch Dispenser</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 640px;
+        margin: 40px auto;
+        padding: 0 16px;
+        line-height: 1.5;
+      }
+      input,
+      button {
+        font: inherit;
+        padding: 8px 12px;
+      }
+      code,
+      pre {
+        background: #f2f2f2;
+        padding: 2px 6px;
+        border-radius: 4px;
+        word-break: break-all;
+      }
+      pre {
+        padding: 12px;
+        white-space: pre-wrap;
+      }
+      .warning {
+        background: #fff4d6;
+        padding: 12px;
+        border-radius: 4px;
+      }
+      .error {
+        color: #b00020;
+      }
+      [hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Postage Batch Dispenser</h1>
+
+    <form id="request-form" hidden>
+      <p>Enter your team name to request a postage batch.</p>
+      <input id="team-name" maxlength="64" placeholder="Team name" required />
+      <button type="submit">Request batch</button>
+    </form>
+
+    <section id="team" hidden>
+      <h2 id="team-title"></h2>
+      <p class="warning">
+        Save your token somewhere safe. It is only kept in this browser. If you lose it, ask an organizer to re-issue
+        it.
+      </p>
+      <p>Token: <code id="token"></code> <button id="copy-token" type="button">Copy</button></p>
+      <p id="pending" hidden>Your request is waiting for approval. This page refreshes automatically.</p>
+      <p id="revoked" hidden class="error">Your token has been revoked. Ask an organizer for help.</p>
+      <div id="approved" hidden>
+        <p>Batch ID: <code id="batch-id"></code></p>
+        <p>Use it with bee-js:</p>
+        <pre id="snippet"></pre>
+      </div>
+    </section>
+
+    <p id="error" class="error"></p>
+
+    <script>
+      const STORAGE_KEY = 'dispenser-token'
+      const $ = id => document.getElementById(id)
+      let pollTimer
+      let gatewayUrl = ''
+
+      function loadToken() {
+        try {
+          return localStorage.getItem(STORAGE_KEY)
+        } catch {
+          return null
+        }
+      }
+
+      function saveToken(token) {
+        try {
+          localStorage.setItem(STORAGE_KEY, token)
+        } catch {}
+      }
+
+      function render(token, team) {
+        $('request-form').hidden = true
+        $('team').hidden = false
+        $('team-title').textContent = team.name
+        $('token').textContent = token
+        $('pending').hidden = team.status !== 'pending'
+        $('revoked').hidden = team.status !== 'revoked'
+        $('approved').hidden = team.status !== 'approved'
+
+        if (team.status === 'approved') {
+          $('batch-id').textContent = team.batchId
+          $('snippet').textContent = [
+            `const bee = new Bee('${gatewayUrl}', { headers: { 'X-Swarm-Postage-Token': '${token}' } })`,
+            `await bee.uploadData('${team.batchId}', 'Hello Swarm!')`,
+          ].join('\n')
+        }
+
+        clearTimeout(pollTimer)
+
+        if (team.status === 'pending') {
+          pollTimer = setTimeout(() => refresh(token), 10000)
+        }
+      }
+
+      async function refresh(token) {
+        const response = await fetch('/api/teams/me', { headers: { authorization: `Bearer ${token}` } })
+
+        if (response.status === 404) {
+          $('request-form').hidden = false
+          $('error').textContent = 'Stored token is unknown, request a new batch or ask an organizer.'
+          return
+        }
+        const team = await response.json()
+        await infoPromise
+        render(token, team)
+      }
+
+      $('request-form').addEventListener('submit', async event => {
+        event.preventDefault()
+        $('error').textContent = ''
+        const response = await fetch('/api/teams', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: $('team-name').value }),
+        })
+        const body = await response.json()
+
+        if (!response.ok) {
+          $('error').textContent = body.error
+          return
+        }
+        saveToken(body.token)
+        await infoPromise
+        render(body.token, body.team)
+      })
+
+      $('copy-token').addEventListener('click', () => navigator.clipboard.writeText($('token').textContent))
+
+      const token = loadToken()
+      const infoPromise = fetch('/api/info')
+        .then(response => response.json())
+        .then(info => (gatewayUrl = info.gatewayUrl))
+
+      if (token) {
+        refresh(token).catch(error => ($('error').textContent = String(error)))
+      } else {
+        $('request-form').hidden = false
+      }
+    </script>
+  </body>
+</html>

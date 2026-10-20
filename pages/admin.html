@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dispenser Admin</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 1100px;
+        margin: 40px auto;
+        padding: 0 16px;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        padding: 4px 8px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid #ddd;
+        vertical-align: top;
+      }
+      code {
+        word-break: break-all;
+      }
+      .duplicate {
+        color: #b36b00;
+      }
+      .error {
+        color: #b00020;
+      }
+      .stats {
+        display: flex;
+        gap: 32px;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Dispenser Admin</h1>
+
+    <section>
+      <h2>Mode</h2>
+      <form id="settings-form">
+        <select id="mode">
+          <option value="manual">Manual</option>
+          <option value="auto">Auto</option>
+        </select>
+        <label>Auto until <input id="auto-until" type="datetime-local" /></label>
+        <button type="submit">Save</button>
+      </form>
+      <p id="mode-status"></p>
+    </section>
+
+    <section class="stats">
+      <div>
+        <h2>Pool</h2>
+        <p id="pool"></p>
+      </div>
+      <div>
+        <h2>Dispenser wallet</h2>
+        <p id="wallet"></p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Teams</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Batch ID</th>
+            <th>IP</th>
+            <th>Requested</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="teams"></tbody>
+      </table>
+    </section>
+
+    <p id="error" class="error"></p>
+
+    <script>
+      const $ = id => document.getElementById(id)
+
+      async function api(method, path, body) {
+        const response = await fetch(`/admin/api/${path}`, {
+          method,
+          headers: { 'content-type': 'application/json' },
+          body: body ? JSON.stringify(body) : undefined,
+        })
+
+        if (!response.ok) {
+          const text = await response.text()
+          throw new Error(text ? JSON.parse(text).error : response.statusText)
+        }
+
+        return response.status === 204 ? null : response.json()
+      }
+
+      function toLocalInput(iso) {
+        const date = new Date(iso)
+        return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+      }
+
+      function cell(content) {
+        const td = document.createElement('td')
+        td.append(content)
+        return td
+      }
+
+      function actionButton(label, action, id) {
+        const button = document.createElement('button')
+        button.textContent = label
+        button.addEventListener('click', () => runAction(action, id))
+        return button
+      }
+
+      async function runAction(action, id) {
+        if (action !== 'approve' && !confirm(`Really ${action} this team's token?`)) return
+
+        try {
+          const result = await api('POST', `teams/${id}/${action}`)
+
+          if (result?.token) prompt('New token, hand it to the team:', result.token)
+          await load()
+        } catch (error) {
+          $('error').textContent = error.message
+        }
+      }
+
+      function renderTeams(teams) {
+        $('teams').replaceChildren(
+          ...teams.map(team => {
+            const tr = document.createElement('tr')
+            const name = cell(team.name)
+
+            if (team.duplicate_name) {
+              name.className = 'duplicate'
+              name.title = 'Duplicate team name'
+            }
+
+            const batch = document.createElement('code')
+            batch.textContent = team.batch_id ?? ''
+            const actions = document.createElement('td')
+
+            if (team.status === 'pending') actions.append(actionButton('Approve', 'approve', team.id))
+            if (team.status !== 'revoked') {
+              actions.append(actionButton('Re-issue', 'reissue', team.id), actionButton('Revoke', 'revoke', team.id))
+            }
+
+            tr.append(
+              name,
+              cell(team.status),
+              cell(batch),
+              cell(team.ip ?? ''),
+              cell(new Date(team.created_at).toLocaleString()),
+              actions,
+            )
+            return tr
+          }),
+        )
+      }
+
+      async function load(fillForm = false) {
+        const state = await api('GET', 'state')
+
+        if (fillForm) {
+          $('mode').value = state.settings.mode
+          $('auto-until').value = state.settings.autoUntil ? toLocalInput(state.settings.autoUntil) : ''
+        }
+        $('mode-status').textContent =
+          state.settings.mode === 'auto'
+            ? `Auto until ${new Date(state.settings.autoUntil).toLocaleString()}`
+            : 'Manual: requests wait for approval'
+        $('pool').textContent =
+          `available ${state.pool.available ?? 0}, syncing ${state.pool.syncing ?? 0}, assigned ${state.pool.assigned ?? 0} (target ${state.poolSize})`
+        $('wallet').textContent = state.wallet.error
+          ? state.wallet.error
+          : `${state.wallet.address}: ${state.wallet.xdai} xDAI, ${state.wallet.bzz} xBZZ`
+        renderTeams(state.teams)
+      }
+
+      $('settings-form').addEventListener('submit', async event => {
+        event.preventDefault()
+        $('error').textContent = ''
+
+        try {
+          const autoUntil = $('auto-until').value ? new Date($('auto-until').value).toISOString() : null
+          await api('PUT', 'settings', { mode: $('mode').value, autoUntil })
+          await load(true)
+        } catch (error) {
+          $('error').textContent = error.message
+        }
+      })
+
+      load(true).catch(error => ($('error').textContent = error.message))
+      setInterval(() => load().catch(() => {}), 15000)
+    </script>
+  </body>
+</html>
