@@ -13,6 +13,7 @@ node --env-file=.env dist/index.js
 ```
 
 - User page: `/`
+- Prod: `docker compose -f compose.prod.yaml up -d --build` (joins the external `edge` and `swarm` networks like the gateway)
 - Admin page: `/admin` (HTTP basic auth)
 
 ## Gateway contract

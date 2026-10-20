@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: dispenser
-      POSTGRES_PASSWORD: dispenser
-      POSTGRES_DB: dispenser
+      POSTGRES_USER: swarm_postage_batch_dispenser
+      POSTGRES_PASSWORD: swarm_postage_batch_dispenser
+      POSTGRES_DB: swarm_postage_batch_dispenser
     ports:
       - '5432:5432'
     volumes:

@@ -1,0 +1,42 @@
+name: swarm-postage-batch-dispenser
+
+services:
+  postage-batch-dispenser:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      BEE_API_URL: ${BEE_API_URL:-http://bee:1633}
+    networks:
+      - default
+      - edge
+      - swarm
+      - db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  default:
+  # Caddy reaches the dispenser here.
+  edge:
+    external: true
+  # Shared with bee-services (`bee:1633`) and the gateway, which calls the token resolver.
+  swarm:
+    external: true
+  # The postgres project's default network, where the database resolves as `postgres`.
+  db:
+    external: true
+    name: ${DB_NETWORK:-postgres_default}

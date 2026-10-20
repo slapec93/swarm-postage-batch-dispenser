@@ -63,6 +63,8 @@ export function createServer(config: Config, teams: Teams, chain: Chain) {
   app.set('trust proxy', 1)
   app.use(express.json())
 
+  app.get('/health', (_req, res) => res.sendStatus(200))
+
   app.post('/api/teams', rateLimit(config.requestsPerIpPerHour), async (req, res) => {
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : ''
 
