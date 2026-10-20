@@ -1,9 +1,7 @@
-import { Bee, Duration, Utils } from '@ethersphere/bee-js'
+import { Bee } from '@ethersphere/bee-js'
 import { Chain } from './chain'
 import { Config } from './config'
 import { db } from './db'
-
-const GNOSIS_BLOCK_TIME_SECONDS = 5
 
 export class PoolWarmer {
   private bee: Bee
@@ -62,12 +60,7 @@ export class PoolWarmer {
       return
     }
 
-    const { currentPrice } = await this.bee.status.getChainState()
-    const amount = Utils.getAmountForDuration(
-      Duration.fromDays(this.config.batchTtlDays),
-      currentPrice,
-      GNOSIS_BLOCK_TIME_SECONDS,
-    )
+    const amount = await this.chain.getAmountForDays(this.config.batchTtlDays)
     console.log(`Buying batch with depth ${this.config.batchDepth} and amount ${amount}`)
     const { batchId, txHash } = await this.chain.buyBatch(this.config.batchDepth, amount)
     await db.query(

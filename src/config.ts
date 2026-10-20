@@ -5,6 +5,7 @@ export interface Config {
   adminPassword: string
   beeApiUrl: string
   publicGatewayUrl: string
+  corsOrigin: string
   gatewaySecret: string
   gatewayOwnerAddress: string
   walletPrivateKey: string
@@ -40,6 +41,7 @@ export function getConfig(): Config {
     adminPassword: required('ADMIN_PASSWORD'),
     beeApiUrl: optional('BEE_API_URL', 'http://localhost:1633'),
     publicGatewayUrl: optional('PUBLIC_GATEWAY_URL', 'https://api.gateway.ethswarm.org'),
+    corsOrigin: optional('CORS_ORIGIN', '*'),
     gatewaySecret: required('GATEWAY_SECRET'),
     gatewayOwnerAddress: required('GATEWAY_OWNER_ADDRESS'),
     walletPrivateKey: required('WALLET_PRIVATE_KEY'),

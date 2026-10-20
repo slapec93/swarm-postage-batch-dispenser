@@ -12,9 +12,18 @@ npm run build
 node --env-file=.env dist/index.js
 ```
 
-- User page: `/`
 - Prod: `docker compose -f compose.prod.yaml up -d --build` (joins the external `edge` and `swarm` networks like the gateway)
-- Admin page: `/admin` (HTTP basic auth)
+
+## Frontend
+
+`frontend/` is a static site uploaded to Swarm. Set the API URL in `frontend/config.js` first, then:
+
+```sh
+swarm-cli upload frontend --stamp <batch-id> --index-document index.html
+```
+
+- User page: `index.html`
+- Admin page: `admin.html` (logs in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`)
 
 ## Gateway contract
 

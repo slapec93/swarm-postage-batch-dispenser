@@ -68,7 +68,9 @@
 
     <p id="error" class="error"></p>
 
+    <script src="config.js"></script>
     <script>
+      const API_URL = window.DISPENSER_API_URL
       const STORAGE_KEY = 'dispenser-token'
       const $ = id => document.getElementById(id)
       let pollTimer
@@ -113,7 +115,7 @@
       }
 
       async function refresh(token) {
-        const response = await fetch('/api/teams/me', { headers: { authorization: `Bearer ${token}` } })
+        const response = await fetch(`${API_URL}/api/teams/me`, { headers: { authorization: `Bearer ${token}` } })
 
         if (response.status === 404) {
           $('request-form').hidden = false
@@ -128,7 +130,7 @@
       $('request-form').addEventListener('submit', async event => {
         event.preventDefault()
         $('error').textContent = ''
-        const response = await fetch('/api/teams', {
+        const response = await fetch(`${API_URL}/api/teams`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ name: $('team-name').value }),
@@ -147,7 +149,7 @@
       $('copy-token').addEventListener('click', () => navigator.clipboard.writeText($('token').textContent))
 
       const token = loadToken()
-      const infoPromise = fetch('/api/info')
+      const infoPromise = fetch(`${API_URL}/api/info`)
         .then(response => response.json())
         .then(info => (gatewayUrl = info.gatewayUrl))
 

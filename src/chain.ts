@@ -12,16 +12,20 @@ import { Config } from './config'
 
 const BZZ_ABI = [
   'function approve(address spender, uint256 value) returns (bool)',
+  'function allowance(address owner, address spender) view returns (uint256)',
   'function balanceOf(address owner) view returns (uint256)',
 ]
 
 const POSTAGE_STAMP_ABI = [
   'function createBatch(address _owner, uint256 _initialBalancePerChunk, uint8 _depth, uint8 _bucketDepth, bytes32 _nonce, bool _immutable) returns (bytes32)',
+  'function lastPrice() view returns (uint64)',
+  'function minimumInitialBalancePerChunk() view returns (uint256)',
 ]
 
 const BUCKET_DEPTH = 16
 const CONFIRMATIONS = 3
 const BZZ_DECIMALS = 16
+const GNOSIS_BLOCK_TIME_SECONDS = 5
 
 export interface PurchasedBatch {
   batchId: string
@@ -46,10 +50,38 @@ export class Chain {
     this.postageStamp = new Contract(config.postageStampAddress, POSTAGE_STAMP_ABI, this.wallet)
   }
 
+  async getAmountForDays(days: number): Promise<bigint> {
+    const [price, minimum] = (await Promise.all([
+      this.postageStamp.lastPrice!(),
+      this.postageStamp.minimumInitialBalancePerChunk!(),
+    ])) as [bigint, bigint]
+    const blocks = BigInt(Math.ceil((days * 86400) / GNOSIS_BLOCK_TIME_SECONDS))
+    const amount = blocks * price + 1n
+
+    if (amount < minimum) {
+      throw Error(
+        `BATCH_TTL_DAYS=${days} is below the contract minimum of ${(Number(minimum / price) * GNOSIS_BLOCK_TIME_SECONDS) / 86400} days`,
+      )
+    }
+
+    return amount
+  }
+
   async buyBatch(depth: number, amount: bigint): Promise<PurchasedBatch> {
     const cost = 2n ** BigInt(depth) * amount
-    const approve = await this.bzz.approve!(this.config.postageStampAddress, cost)
-    await approve.wait(CONFIRMATIONS)
+    const balance = (await this.bzz.balanceOf!(this.wallet.address)) as bigint
+
+    if (balance < cost) {
+      throw Error(
+        `Batch costs ${formatUnits(cost, BZZ_DECIMALS)} xBZZ but the wallet holds ${formatUnits(balance, BZZ_DECIMALS)}`,
+      )
+    }
+    const allowance = (await this.bzz.allowance!(this.wallet.address, this.config.postageStampAddress)) as bigint
+
+    if (allowance < cost) {
+      const approve = await this.bzz.approve!(this.config.postageStampAddress, cost)
+      await approve.wait(CONFIRMATIONS)
+    }
 
     const create = await this.postageStamp.createBatch!(
       this.config.gatewayOwnerAddress,

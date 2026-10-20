@@ -1,12 +1,10 @@
 import express, { NextFunction, Request, Response } from 'express'
 import { timingSafeEqual } from 'crypto'
-import path from 'path'
 import { Chain } from './chain'
 import { Config } from './config'
 import { db } from './db'
 import { HttpError, Mode, Teams, getSettings, setSettings } from './teams'
 
-const PAGES_DIR = path.join(__dirname, '..', 'pages')
 const MAX_TEAM_NAME_LENGTH = 64
 const HOUR_MS = 60 * 60 * 1000
 
@@ -26,7 +24,7 @@ function basicAuth(config: Config) {
 
       return
     }
-    res.set('WWW-Authenticate', 'Basic realm="dispenser-admin"').sendStatus(401)
+    res.status(401).json({ error: 'Unauthorized' })
   }
 }
 
@@ -62,6 +60,18 @@ export function createServer(config: Config, teams: Teams, chain: Chain) {
   const app = express()
   app.set('trust proxy', 1)
   app.use(express.json())
+  app.use((req, res, next) => {
+    res.set('Access-Control-Allow-Origin', config.corsOrigin)
+    res.set('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
+    res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type')
+
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204)
+
+      return
+    }
+    next()
+  })
 
   app.get('/health', (_req, res) => res.sendStatus(200))
 
@@ -96,7 +106,6 @@ export function createServer(config: Config, teams: Teams, chain: Chain) {
 
   const admin = express.Router()
   admin.use(basicAuth(config))
-  admin.get('/', (_req, res) => res.sendFile(path.join(PAGES_DIR, 'admin.html')))
 
   admin.get('/api/state', async (_req, res) => {
     const [settings, teamList, pool, wallet] = await Promise.all([
@@ -135,7 +144,6 @@ export function createServer(config: Config, teams: Teams, chain: Chain) {
   })
 
   app.use('/admin', admin)
-  app.get('/', (_req, res) => res.sendFile(path.join(PAGES_DIR, 'index.html')))
 
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (error instanceof HttpError) {
