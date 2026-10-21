@@ -4,59 +4,37 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dispenser Admin</title>
-    <style>
-      body {
-        font-family: system-ui, sans-serif;
-        max-width: 1100px;
-        margin: 40px auto;
-        padding: 0 16px;
-      }
-      input,
-      select,
-      button {
-        font: inherit;
-        padding: 4px 8px;
-      }
-      table {
-        border-collapse: collapse;
-        width: 100%;
-      }
-      th,
-      td {
-        text-align: left;
-        padding: 6px 8px;
-        border-bottom: 1px solid #ddd;
-        vertical-align: top;
-      }
-      code {
-        word-break: break-all;
-      }
-      .duplicate {
-        color: #b36b00;
-      }
-      .error {
-        color: #b00020;
-      }
-      .stats {
-        display: flex;
-        gap: 32px;
-        flex-wrap: wrap;
-      }
-    </style>
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <h1>Dispenser Admin</h1>
+    <header>
+      <div class="header-inner wide">
+        <img src="logo.svg" alt="Swarm" />
+        <div>
+          <div class="title">Postage Batch Dispenser</div>
+          <div class="subtitle">Admin</div>
+        </div>
+        <div class="spacer"></div>
+        <button id="logout" class="secondary small" type="button" hidden>Log out</button>
+      </div>
+    </header>
 
-    <form id="login-form" hidden>
+    <form id="login-form" class="card login" hidden>
+      <h1>Admin login</h1>
       <input id="username" placeholder="Username" autocomplete="username" required />
       <input id="password" type="password" placeholder="Password" autocomplete="current-password" required />
       <button type="submit">Log in</button>
+      <p id="login-error" class="error"></p>
     </form>
 
-    <main id="dashboard" hidden>
-      <section>
-        <h2>Mode</h2>
-        <form id="settings-form">
+    <main id="dashboard" class="wide" hidden>
+      <section class="card">
+        <div class="row" style="justify-content: space-between; margin-bottom: 16px">
+          <h2 style="margin: 0">Mode</h2>
+          <span id="mode-badge" class="badge"></span>
+        </div>
+        <form id="settings-form" class="row">
           <select id="mode">
             <option value="manual">Manual</option>
             <option value="auto">Auto</option>
@@ -64,39 +42,74 @@
           <label>Auto until <input id="auto-until" type="datetime-local" /></label>
           <button type="submit">Save</button>
         </form>
-        <p id="mode-status"></p>
+        <p id="mode-status" class="muted" style="margin: 12px 0 0"></p>
       </section>
 
-      <section class="stats">
-        <div>
-          <h2>Pool</h2>
-          <p id="pool"></p>
-        </div>
-        <div>
-          <h2>Dispenser wallet</h2>
-          <p id="wallet"></p>
+      <section class="card">
+        <h2>Pool</h2>
+        <div class="stats">
+          <div class="stat">
+            <div id="pool-available" class="value">0</div>
+            <div class="label">Available</div>
+          </div>
+          <div class="stat">
+            <div id="pool-syncing" class="value">0</div>
+            <div class="label">Syncing</div>
+          </div>
+          <div class="stat">
+            <div id="pool-assigned" class="value">0</div>
+            <div class="label">Assigned</div>
+          </div>
+          <div class="stat">
+            <div id="pool-target" class="value">0</div>
+            <div class="label">Target pool size</div>
+          </div>
         </div>
       </section>
 
-      <section>
+      <section class="card">
+        <h2>Dispenser wallet</h2>
+        <p id="wallet-error" class="error"></p>
+        <div id="wallet">
+          <div class="field">
+            <h3>Address</h3>
+            <code id="wallet-address"></code>
+          </div>
+          <div class="stats">
+            <div class="stat">
+              <div id="wallet-xdai" class="value"></div>
+              <div class="label">xDAI</div>
+            </div>
+            <div class="stat">
+              <div id="wallet-bzz" class="value"></div>
+              <div class="label">xBZZ</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
         <h2>Teams</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Batch ID</th>
-              <th>IP</th>
-              <th>Requested</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="teams"></tbody>
-        </table>
+        <p id="no-teams" class="muted" hidden>No requests yet.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Batch ID</th>
+                <th>IP</th>
+                <th>Requested</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="teams"></tbody>
+          </table>
+        </div>
       </section>
-    </main>
 
-    <p id="error" class="error"></p>
+      <p id="error" class="error"></p>
+    </main>
 
     <script src="config.js"></script>
     <script>
@@ -126,8 +139,9 @@
         credentials = null
         saveCredentials(null)
         $('dashboard').hidden = true
+        $('logout').hidden = true
         $('login-form').hidden = false
-        $('error').textContent = message
+        $('login-error').textContent = message
       }
 
       async function api(method, path, body) {
@@ -160,9 +174,17 @@
         return td
       }
 
-      function actionButton(label, action, id) {
+      function badge(text) {
+        const span = document.createElement('span')
+        span.className = `badge ${text}`
+        span.textContent = text
+        return span
+      }
+
+      function actionButton(label, action, id, style) {
         const button = document.createElement('button')
         button.textContent = label
+        button.className = `small ${style}`
         button.addEventListener('click', () => runAction(action, id))
         return button
       }
@@ -181,6 +203,7 @@
       }
 
       function renderTeams(teams) {
+        $('no-teams').hidden = teams.length > 0
         $('teams').replaceChildren(
           ...teams.map(team => {
             const tr = document.createElement('tr')
@@ -192,21 +215,26 @@
             }
 
             const batch = document.createElement('code')
-            batch.textContent = team.batch_id ?? ''
-            const actions = document.createElement('td')
+            batch.textContent = team.batch_id ? `${team.batch_id.slice(0, 8)}…${team.batch_id.slice(-6)}` : '—'
+            batch.title = team.batch_id ?? ''
+            const actions = document.createElement('div')
+            actions.className = 'actions'
 
-            if (team.status === 'pending') actions.append(actionButton('Approve', 'approve', team.id))
+            if (team.status === 'pending') actions.append(actionButton('Approve', 'approve', team.id, ''))
             if (team.status !== 'revoked') {
-              actions.append(actionButton('Re-issue', 'reissue', team.id), actionButton('Revoke', 'revoke', team.id))
+              actions.append(
+                actionButton('Re-issue', 'reissue', team.id, 'secondary'),
+                actionButton('Revoke', 'revoke', team.id, 'danger'),
+              )
             }
 
             tr.append(
               name,
-              cell(team.status),
+              cell(badge(team.status)),
               cell(batch),
               cell(team.ip ?? ''),
               cell(new Date(team.created_at).toLocaleString()),
-              actions,
+              cell(actions),
             )
             return tr
           }),
@@ -217,20 +245,30 @@
         const state = await api('GET', 'state')
         $('login-form').hidden = true
         $('dashboard').hidden = false
+        $('logout').hidden = false
 
         if (fillForm) {
           $('mode').value = state.settings.mode
           $('auto-until').value = state.settings.autoUntil ? toLocalInput(state.settings.autoUntil) : ''
         }
+        $('mode-badge').textContent = state.settings.mode
+        $('mode-badge').className = `badge ${state.settings.mode}`
         $('mode-status').textContent =
           state.settings.mode === 'auto'
-            ? `Auto until ${new Date(state.settings.autoUntil).toLocaleString()}`
-            : 'Manual: requests wait for approval'
-        $('pool').textContent =
-          `available ${state.pool.available ?? 0}, syncing ${state.pool.syncing ?? 0}, assigned ${state.pool.assigned ?? 0} (target ${state.poolSize})`
-        $('wallet').textContent = state.wallet.error
-          ? state.wallet.error
-          : `${state.wallet.address}: ${state.wallet.xdai} xDAI, ${state.wallet.bzz} xBZZ`
+            ? `Requests are approved automatically until ${new Date(state.settings.autoUntil).toLocaleString()}.`
+            : 'Requests wait for approval.'
+        $('pool-available').textContent = state.pool.available ?? 0
+        $('pool-syncing').textContent = state.pool.syncing ?? 0
+        $('pool-assigned').textContent = state.pool.assigned ?? 0
+        $('pool-target').textContent = state.poolSize
+        $('wallet-error').textContent = state.wallet.error ?? ''
+        $('wallet').hidden = Boolean(state.wallet.error)
+
+        if (!state.wallet.error) {
+          $('wallet-address').textContent = state.wallet.address
+          $('wallet-xdai').textContent = Number(state.wallet.xdai).toFixed(4)
+          $('wallet-bzz').textContent = Number(state.wallet.bzz).toFixed(4)
+        }
         renderTeams(state.teams)
       }
 
@@ -250,15 +288,17 @@
       $('login-form').addEventListener('submit', async event => {
         event.preventDefault()
         credentials = btoa(`${$('username').value}:${$('password').value}`)
-        $('error').textContent = ''
+        $('login-error').textContent = ''
 
         try {
           await load(true)
           saveCredentials(credentials)
         } catch (error) {
-          if (credentials) $('error').textContent = `Login failed: ${error.message}`
+          if (credentials) $('login-error').textContent = `Login failed: ${error.message}`
         }
       })
+
+      $('logout').addEventListener('click', () => showLogin())
 
       if (credentials) {
         load(true).catch(error => credentials && ($('error').textContent = error.message))

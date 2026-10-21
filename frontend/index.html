@@ -4,69 +4,81 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Postage Batch Dispenser</title>
-    <style>
-      body {
-        font-family: system-ui, sans-serif;
-        max-width: 640px;
-        margin: 40px auto;
-        padding: 0 16px;
-        line-height: 1.5;
-      }
-      input,
-      button {
-        font: inherit;
-        padding: 8px 12px;
-      }
-      code,
-      pre {
-        background: #f2f2f2;
-        padding: 2px 6px;
-        border-radius: 4px;
-        word-break: break-all;
-      }
-      pre {
-        padding: 12px;
-        white-space: pre-wrap;
-      }
-      .warning {
-        background: #fff4d6;
-        padding: 12px;
-        border-radius: 4px;
-      }
-      .error {
-        color: #b00020;
-      }
-      [hidden] {
-        display: none;
-      }
-    </style>
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <h1>Postage Batch Dispenser</h1>
-
-    <form id="request-form" hidden>
-      <p>Enter your team name to request a postage batch.</p>
-      <input id="team-name" maxlength="64" placeholder="Team name" required />
-      <button type="submit">Request batch</button>
-    </form>
-
-    <section id="team" hidden>
-      <h2 id="team-title"></h2>
-      <p class="warning">
-        Save your token somewhere safe. It is only kept in this browser. If you lose it, ask an organizer to re-issue
-        it.
-      </p>
-      <p>Token: <code id="token"></code> <button id="copy-token" type="button">Copy</button></p>
-      <p id="pending" hidden>Your request is waiting for approval. This page refreshes automatically.</p>
-      <p id="revoked" hidden class="error">Your token has been revoked. Ask an organizer for help.</p>
-      <div id="approved" hidden>
-        <p>Batch ID: <code id="batch-id"></code></p>
-        <p>Use it with bee-js:</p>
-        <pre id="snippet"></pre>
+    <header>
+      <div class="header-inner narrow">
+        <img src="logo.svg" alt="Swarm" />
+        <div>
+          <div class="title">Postage Batch Dispenser</div>
+          <div class="subtitle">Storage for your hackathon project on Swarm</div>
+        </div>
       </div>
-    </section>
+    </header>
 
-    <p id="error" class="error"></p>
+    <main class="narrow">
+      <form id="request-form" class="card" hidden>
+        <h1>Get a postage batch</h1>
+        <p class="muted">
+          A postage batch lets your team upload data to Swarm through the gateway. Enter your team name to request one.
+        </p>
+        <div class="row">
+          <input id="team-name" maxlength="64" placeholder="Team name" required />
+          <button type="submit">Request batch</button>
+        </div>
+      </form>
+
+      <section id="team" hidden>
+        <div class="card">
+          <div class="row" style="justify-content: space-between; margin-bottom: 16px">
+            <h1 id="team-title" style="margin: 0"></h1>
+            <span id="status" class="badge"></span>
+          </div>
+
+          <div class="notice">
+            Save your token somewhere safe. It is only kept in this browser. If you lose it, ask an organizer to
+            re-issue it.
+          </div>
+
+          <div class="field">
+            <h3>Token</h3>
+            <div class="field-value">
+              <code id="token"></code>
+              <button id="copy-token" class="secondary small" type="button">Copy</button>
+            </div>
+          </div>
+
+          <p id="pending" class="muted" hidden>
+            Your request is waiting for approval by an organizer. This page refreshes automatically.
+          </p>
+          <p id="revoked" class="error" hidden>Your token has been revoked. Ask an organizer for help.</p>
+
+          <div id="approved" hidden>
+            <div class="field">
+              <h3>Batch ID</h3>
+              <div class="field-value">
+                <code id="batch-id"></code>
+                <button id="copy-batch" class="secondary small" type="button">Copy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="usage" class="card" hidden>
+          <div class="row" style="justify-content: space-between; margin-bottom: 12px">
+            <h2 style="margin: 0">Upload with bee-js</h2>
+            <button id="copy-snippet" class="secondary small" type="button">Copy</button>
+          </div>
+          <pre id="snippet"></pre>
+        </div>
+      </section>
+
+      <p id="error" class="error"></p>
+    </main>
+
+    <footer>Powered by <a href="https://www.ethswarm.org" target="_blank" rel="noopener">Swarm</a></footer>
 
     <script src="config.js"></script>
     <script>
@@ -90,20 +102,33 @@
         } catch {}
       }
 
+      function copyButton(buttonId, sourceId) {
+        $(buttonId).addEventListener('click', async () => {
+          await navigator.clipboard.writeText($(sourceId).textContent)
+          $(buttonId).textContent = 'Copied'
+          setTimeout(() => ($(buttonId).textContent = 'Copy'), 1500)
+        })
+      }
+
       function render(token, team) {
         $('request-form').hidden = true
         $('team').hidden = false
         $('team-title').textContent = team.name
+        $('status').textContent = team.status
+        $('status').className = `badge ${team.status}`
         $('token').textContent = token
         $('pending').hidden = team.status !== 'pending'
         $('revoked').hidden = team.status !== 'revoked'
         $('approved').hidden = team.status !== 'approved'
+        $('usage').hidden = team.status !== 'approved'
 
         if (team.status === 'approved') {
           $('batch-id').textContent = team.batchId
           $('snippet').textContent = [
+            `import { Bee } from '@ethersphere/bee-js'`,
+            ``,
             `const bee = new Bee('${gatewayUrl}', { headers: { 'X-Swarm-Postage-Token': '${token}' } })`,
-            `await bee.uploadData('${team.batchId}', 'Hello Swarm!')`,
+            `const { reference } = await bee.data.upload('${team.batchId}', 'Hello Swarm!')`,
           ].join('\n')
         }
 
@@ -146,7 +171,9 @@
         render(body.token, body.team)
       })
 
-      $('copy-token').addEventListener('click', () => navigator.clipboard.writeText($('token').textContent))
+      copyButton('copy-token', 'token')
+      copyButton('copy-batch', 'batch-id')
+      copyButton('copy-snippet', 'snippet')
 
       const token = loadToken()
       const infoPromise = fetch(`${API_URL}/api/info`)
