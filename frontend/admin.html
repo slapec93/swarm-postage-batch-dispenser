@@ -255,11 +255,13 @@
         try {
           await load(true)
           saveCredentials(credentials)
-        } catch {}
+        } catch (error) {
+          if (credentials) $('error').textContent = `Login failed: ${error.message}`
+        }
       })
 
       if (credentials) {
-        load(true).catch(() => {})
+        load(true).catch(error => credentials && ($('error').textContent = error.message))
       } else {
         showLogin()
       }
