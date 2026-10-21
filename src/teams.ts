@@ -37,9 +37,9 @@ export async function getSettings(): Promise<Settings> {
   const row = rows[0]
 
   if (row.mode === 'auto' && (!row.auto_until || row.auto_until <= new Date())) {
-    await db.query("UPDATE settings SET mode = 'manual' WHERE id = 1")
+    await db.query("UPDATE settings SET mode = 'manual', auto_until = NULL WHERE id = 1")
 
-    return { mode: 'manual', autoUntil: row.auto_until }
+    return { mode: 'manual', autoUntil: null }
   }
 
   return { mode: row.mode, autoUntil: row.auto_until }
