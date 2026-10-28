@@ -16,6 +16,7 @@ export interface Config {
   batchDepth: number
   batchTtlDays: number
   poolIntervalSeconds: number
+  batchReadyMinutes: number
   requestsPerIpPerHour: number
 }
 
@@ -39,7 +40,7 @@ export function getConfig(): Config {
     databaseUrl: required('DATABASE_URL'),
     adminUsername: required('ADMIN_USERNAME'),
     adminPassword: required('ADMIN_PASSWORD'),
-    beeApiUrl: optional('BEE_API_URL', 'http://localhost:1633'),
+    beeApiUrl: optional('BEE_API_URL', ''),
     publicGatewayUrl: optional('PUBLIC_GATEWAY_URL', 'https://api.gateway.ethswarm.org'),
     corsOrigin: optional('CORS_ORIGIN', '*'),
     gatewaySecret: required('GATEWAY_SECRET'),
@@ -52,6 +53,7 @@ export function getConfig(): Config {
     batchDepth: Number(optional('BATCH_DEPTH', '22')),
     batchTtlDays: Number(optional('BATCH_TTL_DAYS', '30')),
     poolIntervalSeconds: Number(optional('POOL_INTERVAL_SECONDS', '60')),
+    batchReadyMinutes: Number(optional('BATCH_READY_MINUTES', '10')),
     requestsPerIpPerHour: Number(optional('REQUESTS_PER_IP_PER_HOUR', '5')),
   }
 }

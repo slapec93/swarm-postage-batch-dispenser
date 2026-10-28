@@ -4,14 +4,14 @@ import { Config } from './config'
 import { db } from './db'
 
 export class PoolWarmer {
-  private bee: Bee
+  private bee: Bee | null
   private running = false
 
   constructor(
     private config: Config,
     private chain: Chain,
   ) {
-    this.bee = new Bee(config.beeApiUrl)
+    this.bee = config.beeApiUrl ? new Bee(config.beeApiUrl) : null
   }
 
   start(): void {
@@ -26,6 +26,9 @@ export class PoolWarmer {
     this.running = true
 
     try {
+      if (this.bee && !(await this.beeNodeIsBatchOwner(this.bee))) {
+        return
+      }
       await this.promoteSyncedBatches()
       await this.refill()
     } catch (error) {
@@ -35,11 +38,37 @@ export class PoolWarmer {
     }
   }
 
+  private async beeNodeIsBatchOwner(bee: Bee): Promise<boolean> {
+    const { ethereum } = await bee.connectivity.getNodeAddresses()
+    const nodeAddress = ethereum.toHex().replace(/^0x/, '').toLowerCase()
+    const ownerAddress = this.config.gatewayOwnerAddress.replace(/^0x/, '').toLowerCase()
+
+    if (nodeAddress !== ownerAddress) {
+      console.error(
+        `BEE_API_URL node is 0x${nodeAddress} but GATEWAY_OWNER_ADDRESS is 0x${ownerAddress}; not buying or promoting batches`,
+      )
+    }
+
+    return nodeAddress === ownerAddress
+  }
+
   private async promoteSyncedBatches(): Promise<void> {
+    if (!this.bee) {
+      const { rows } = await db.query<{ batch_id: string }>(
+        "UPDATE batches SET status = 'available' WHERE status = 'syncing' AND created_at <= now() - make_interval(mins => $1) RETURNING batch_id",
+        [this.config.batchReadyMinutes],
+      )
+      rows.forEach(({ batch_id }) =>
+        console.log(`Batch ${batch_id} is available after ${this.config.batchReadyMinutes} minutes`),
+      )
+
+      return
+    }
+    const bee = this.bee
     const { rows } = await db.query<{ batch_id: string }>("SELECT batch_id FROM batches WHERE status = 'syncing'")
 
     for (const { batch_id } of rows) {
-      const usable = await this.bee.stamp.get(batch_id).then(
+      const usable = await bee.stamp.get(batch_id).then(
         batch => batch.usable,
         () => false,
       )

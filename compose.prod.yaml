@@ -9,7 +9,6 @@ services:
     environment:
       PORT: "3000"
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
-      BEE_API_URL: ${BEE_API_URL:-http://bee:1633}
     networks:
       - default
       - edge
